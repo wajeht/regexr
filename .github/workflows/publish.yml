@@ -91,7 +91,7 @@ jobs:
 
   deploy:
     name: Deploy
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && vars.HOME_OPS_DEPLOY_ENABLED == 'true'
     needs: release
     uses: wajeht/docker-cd-deploy-workflow/.github/workflows/deploy.yaml@970a4d7bd568e096d091fbec3371019c763def1f # v0.0.26
     with:

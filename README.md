@@ -21,4 +21,4 @@ image: ghcr.io/wajeht/regexr:<tag>
 
 Pull requests and main pushes validate the `linux/amd64` image. Version tags publish `linux/amd64` and `linux/arm64` images, create a GitHub release, and update `apps/regexr` in home-ops.
 
-Automatic deployment requires a `GH_TOKEN` Actions secret with access to home-ops and GHCR.
+Automatic deployment requires a `GH_TOKEN` Actions secret with access to home-ops and GHCR, plus a repository variable named `HOME_OPS_DEPLOY_ENABLED` set to `true`.
