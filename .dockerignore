@@ -1,0 +1,11 @@
+.git
+.github
+README.md
+docker-compose.yml
+.DS_Store
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+.playwright-cli/

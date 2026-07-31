@@ -1,0 +1,217 @@
+diff --git a/dev/src/RegExr.js b/dev/src/RegExr.js
+index f3c8d05..5aaf6e3 100644
+--- a/dev/src/RegExr.js
++++ b/dev/src/RegExr.js
+@@ -76,10 +76,7 @@ export default class RegExr extends EventDispatcher {
+ 	}
+ 
+ 	_initAds() {
+-		_native && _native.init("CK7D65QM", { // "CK7D65QM" use "CK7D4KQE" to test Carbon ads
+-			carbonZoneKey: 'CK7DPKQU',
+-			targetClass: 'native-js'
+-		});
++		// Ads are disabled in the self-hosted image.
+ 	}
+ 
+ 	_localInit() {
+@@ -191,17 +188,7 @@ export default class RegExr extends EventDispatcher {
+ 	}
+ 
+ 	_migrateFavorites() {
+-		let ls = window.localStorage, l=ls.length;
+-		if (!l || ls.getItem("f_v3") >= "1") { return }
+-		let ids = [];
+-		for (let i=0; i<l; i++) {
+-			let key = ls.key(i), val=ls.getItem(key);
+-			if (key[0] === "f" && val === "1") {
+-				ids.push(key.substr(1));
+-			}
+-		}
+-		if (!ids.length) { ls.setItem("f_v3", "1"); return; }
+-		Server.multiFavorite(ids).then(() => ls.setItem("f_v3", "1"));
++		window.localStorage.setItem("f_v3", "1");
+ 	}
+ 
+ 	_change() {
+diff --git a/dev/src/app.js b/dev/src/app.js
+index 2b90d9c..e8cf4f6 100644
+--- a/dev/src/app.js
++++ b/dev/src/app.js
+@@ -18,8 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ 
+ import "../lib/codemirror.js";
+ import "../lib/clipboard.js";
+-import "../lib/native.js";
+ import RegExr from "./RegExr";
+ 
+ let app = new RegExr();
+-export default app;
+\ No newline at end of file
++export default app;
+diff --git a/dev/src/docs/sidebar_content.js b/dev/src/docs/sidebar_content.js
+index 3d81282..afc2f5c 100644
+--- a/dev/src/docs/sidebar_content.js
++++ b/dev/src/docs/sidebar_content.js
+@@ -88,9 +88,7 @@ home.kids = [
+ 		{
+ 		label:"Getting started",
+ 		desc:"RegExr provides real-time visual results, syntax highlighting, tooltips, and undo/redo ({{getCtrlKey()}}-Z / Y) so it's easy and fun to explore Regular Expressions."+
+-			"<p>Browse through the <b>RegEx Reference</b> and test different tokens to see what they do, then check out <b>Community Patterns</b> to see examples.</p>"+
+-			"<p>You can also <b>Save</b> your patterns for later reference, or to share with others. <b>Sign In</b> to ensure you don't lose your patterns.</p>"+
+-			"<p>Modify your pattern's details, share it with the <b>Community</b>, or make it private, or delete it in <b>Pattern Settings</b></p>",
++			"<p>Browse through the <b>RegEx Reference</b> and test different tokens to see what they do.</p>",
+ 		kids: [
+ 			{
+ 			label:"Expression panel",
+@@ -149,9 +147,8 @@ home.kids = [
+ 			},
+ 			{
+ 			label:"Menu",
+-			desc:"The <b>Menu</b> (this panel) includes <b>Help</b>, a full <b>RegEx Reference</b>, a <b>Cheatsheet</b>, and <b>Pattern Settings</b> features."+
+-				"<p>Double-click a selected item in the <b>RegEx Reference</b> to insert it into your <b>Expression</b>. Click the arrow beside an example to load it.</p>"+
+-				"<p>The menu also includes searchable <b>Community Patterns</b>, and patterns you've created or favorited in <b>My Patterns</b>.</p>"
++			desc:"The <b>Menu</b> (this panel) includes <b>Help</b>, a full <b>RegEx Reference</b>, and a <b>Cheatsheet</b>."+
++				"<p>Double-click a selected item in the <b>RegEx Reference</b> to insert it into your <b>Expression</b>. Click the arrow beside an example to load it.</p>"
+ 			}
+ 		]
+ 		},
+@@ -189,7 +186,7 @@ home.kids = [
+ 		},
+ 		{
+ 		label:"Query string support",
+-		desc:"In addition to the built in <b>Save</b> mechanism which creates a shareable link, RegExr also supports the ability to pre-populate a pattern via the query string."+
++		desc:"RegExr supports pre-populating a pattern via the query string."+
+ 			"<p>The following query string params are recognized:<ul>"+
+ 			"<li><code>engine</code> - the RegEx engine to use (<code>js</code> or <code>pcre</code>)</li>"+
+ 			"<li><code>expression</code> - populates the Expression area. It is recommended to pass a full expression with flags (<code>/.*/ig</code>) not just the pattern (<code>.*</code>)</li>"+
+@@ -202,3 +199,9 @@ home.kids = [
+ 	]
+ 	}
+ ];
++
++// Account, community, and remote save/share features are intentionally disabled
++// in the stateless self-hosted image.
++home.kids = home.kids.filter(item => !["share", "favorites", "community"].includes(item.id));
++let help = home.kids.find(item => item.id === "help");
++help.kids = help.kids.filter(item => item.id !== "signin");
+diff --git a/dev/src/net/Server.js b/dev/src/net/Server.js
+index da85630..2b75081 100644
+--- a/dev/src/net/Server.js
++++ b/dev/src/net/Server.js
+@@ -196,6 +196,6 @@ class ServerPromise {
+ }
+ 
+ Server.isLocal = Utils.isLocal;
+-Server.useBeta = Server.isLocal || (window.location.hostname === "beta.regexr.com");
+-Server.host = "https://" + (Server.useBeta ? "beta." : "") + "regexr.com"
+-Server.url =  Server.host + "/server/api.php";
++Server.useBeta = false;
++Server.host = window.location.origin;
++Server.url = Server.host + "/server/api.php";
+diff --git a/dev/src/utils/Track.js b/dev/src/utils/Track.js
+index 6425f69..5fa185a 100644
+--- a/dev/src/utils/Track.js
++++ b/dev/src/utils/Track.js
+@@ -21,16 +21,8 @@ export default Track;
+ 
+ Track.GA_ID = "UA-3579542-6";
+ 
+-Track.page = function(path) {
+-	gtag("config", Track.GA_ID, {"page_path": "/"+path});
+-};
++Track.page = function() {};
+ 
+ // https://developers.google.com/analytics/devguides/collection/gtagjs/events
+-Track.event = function(name, category, label) {
+-	let o = {};
+-	if (category) { o.event_category = category; }
+-	if (label) { o.event_label = label; }
+-	gtag("event", name, o);
+-}
+-
++Track.event = function() {};
+ 
+diff --git a/gulpfile.babel.js b/gulpfile.babel.js
+index f21ca37..05ca448 100644
+--- a/gulpfile.babel.js
++++ b/gulpfile.babel.js
+@@ -3,8 +3,7 @@ const gulp = require("gulp");
+ const inject = require("gulp-inject");
+ const rename = require("gulp-rename");
+ const template = require("gulp-template");
+-const sass = require("gulp-sass");
+-sass.compiler = require("sass");
++const sass = require("gulp-sass")(require("sass"));
+ const cleanCSS = require("gulp-clean-css");
+ const htmlmin = require("gulp-htmlmin");
+ const svgstore = require("gulp-svgstore");
+diff --git a/index.html b/index.html
+index 0473322..2a769a7 100644
+--- a/index.html
++++ b/index.html
+@@ -4,23 +4,15 @@
+ 	<meta charset="UTF-8">
+ 	<title>RegExr: Learn, Build, &amp; Test RegEx</title>
+ 
+-	<!-- Google tag (gtag.js) -->
+-	<script async src="https://www.googletagmanager.com/gtag/js?id=G-FS551ZDYMX"></script>
+-	<script>
+-		window.dataLayer = window.dataLayer || [];
+-		function gtag(){dataLayer.push(arguments);}
+-		gtag('js', new Date());
+-
+-		gtag('config', 'G-FS551ZDYMX');
+-	</script>
+-
+ 	<!-- source for this is in ./assets/workers/RegExWorker.js -->
+ 	<script id="regexWorker" type="javascript/worker">
+ 		onmessage=function(e){postMessage("onload");var t,s,n,a=e.data,i=a.text,d=a.tests,l=a.mode,r=new RegExp(a.pattern,a.flags),o=[];if("tests"===l)for(var g=0,x=d.length;g<x;g++){let e=d[g];i=e.text,r.lastIndex=0,t=r.exec(i),o[g]=t?{i:t.index,l:t[0].length,id:e.id}:{id:e.id}}else for(;t=r.exec(i);){s===r.lastIndex&&(n={id:"infinite",warning:!0},++r.lastIndex),s=r.lastIndex;var f=t.reduce(function(e,t,s){return(0===s||e.push({s:t}))&&e},[]);if(o.push({i:t.index,l:t[0].length,groups:f}),!r.global)break}postMessage({error:n,matches:o,mode:l})};
+ 	</script>
+ 
+-	<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700&family=Source+Code+Pro:wght@200;400;700&display=swap" rel="stylesheet">
+ 	<link rel="stylesheet" type="text/css" href="<%= css_file %>">
++	<style>
++		.header .settings, .header .save, .header .signin, .sidebar .hello { display: none !important; }
++	</style>
+ 
+ 	<!-- basic meta tags -->
+ 	<meta name="title" content="RegExr: Learn, Build, & Test RegEx" />
+@@ -48,7 +40,7 @@
+ 	<meta property="og:image:height" content="630"/>
+     <meta property="og:title" content="RegExr: Learn, Build, & Test RegEx"/>
+     <meta property="og:description" content="RegExr is an online tool to learn, build, & test Regular Expressions (RegEx / RegExp)."/>
+-    <meta property="og:url" content="https://regexr.com/"/>
++	<meta property="og:url" content="https://regex.jaw.dev/"/>
+     <meta property="og:site_name" content="RegExr"/>
+ 
+ 	<meta name="twitter:card" content="summary_large_image"/>
+@@ -56,7 +48,7 @@
+ 	<meta name="twitter:title" content="RegExr: Learn, Build, & Test RegEx"/>
+ 	<meta name="twitter:description" content="RegExr is an online tool to learn, build, & test Regular Expressions (RegEx / RegExp)."/>
+ 	<meta name="twitter:image" content="https://regexr.com/assets/card.png"/>
+-	<meta name="twitter:url" content="https://regexr.com/" />
++	<meta name="twitter:url" content="https://regex.jaw.dev/" />
+ </head>
+ 
+ <body>
+@@ -110,11 +102,9 @@
+ 							<li>Results update in <b>real-time</b> as you type.</li>
+ 							<li><b>Roll over</b> a match or expression for details.</li>
+ 							<li>Validate patterns with suites of <b>Tests</b>.</li>
+-							<li><b>Save</b> &amp; share expressions with others.</li>
+ 							<li>Use <b>Tools</b> to explore your results.</li>
+ 							<li>Full <b>RegEx Reference</b> with help &amp; examples.</li>
+ 							<li><b>Undo</b> &amp; <b>Redo</b> with {{getCtrlKey()}}-Z / Y in editors.</li>
+-							<li>Search for &amp; rate <b>Community Patterns</b>.</li>
+ 						</ul>
+ 					</div>
+ 					<div class="hello">
+@@ -194,7 +184,7 @@ RegExr was created by gskinner.com.
+ 
+ Edit the Expression & Text to see matches. Roll over matches or the expression for details. PCRE & JavaScript flavors of RegEx are supported. Validate your expression with Tests mode.
+ 
+-The side bar includes a Cheatsheet, full Reference, and Help. You can also Save & Share with the Community and view patterns you create or favorite in My Patterns.
++The side bar includes a Cheatsheet, full Reference, and Help.
+ 
+ Explore results with the Tools below. Replace & List output custom results. Details lists capture groups. Explain describes your expression in plain English.
+ </textarea>
