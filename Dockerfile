@@ -1,5 +1,5 @@
 ARG NODE_IMAGE=node:24.18.1-bookworm-slim@sha256:235600a8101ab264e117b1768e925532262668dc9b581ef1dd7d96ced463b8e7
-ARG PHP_IMAGE=php:8.5.7-cli-alpine3.22@sha256:d4db4138a7adb7cb7b0152b5e12b121c473ea37195170a4c498058fd3b16e480
+ARG FRANKENPHP_IMAGE=dunglas/frankenphp:1-php8.5-bookworm@sha256:52ea80fc6691dd3afb38a9c6a96c8fe817aef6117f7a7a2f3dd308daf8fa0b9a
 
 FROM ${NODE_IMAGE} AS build
 
@@ -22,17 +22,24 @@ RUN npm ci --ignore-scripts --no-audit --no-fund \
     && NODE_ENV=production ./node_modules/.bin/gulp deploy \
     && rm -rf build/server build/index.php
 
-FROM ${PHP_IMAGE}
+FROM ${FRANKENPHP_IMAGE}
 
 LABEL org.opencontainers.image.source="https://github.com/wajeht/regexr" \
       org.opencontainers.image.licenses="GPL-3.0-only" \
       org.opencontainers.image.title="Self-hosted RegExr"
 
+RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
+    && setcap -r /usr/local/bin/frankenphp
+
+ENV XDG_CONFIG_HOME=/tmp/caddy-config \
+    XDG_DATA_HOME=/tmp/caddy-data
+
 WORKDIR /app
 
-COPY --from=build --chown=www-data:www-data /src/build ./
-COPY --chown=www-data:www-data api.php ./server/api.php
-COPY --chown=www-data:www-data index.php router.php ./
+COPY --from=build /src/build ./
+COPY api.php ./server/api.php
+COPY index.php ./
+COPY --chmod=644 Caddyfile /etc/frankenphp/Caddyfile
 COPY LICENSE /usr/share/licenses/regexr/LICENSE
 
 USER www-data
@@ -40,6 +47,7 @@ USER www-data
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD php -r '$r=@file_get_contents("http://127.0.0.1:8080/healthz"); exit($r === "ok\n" ? 0 : 1);'
+  CMD php -r '$r=@file_get_contents("http://127.0.0.1:8080/healthz"); exit($r === "ok" ? 0 : 1);'
 
-CMD ["php", "-d", "expose_php=0", "-d", "display_errors=0", "-d", "log_errors=1", "-d", "max_execution_time=3", "-d", "memory_limit=128M", "-d", "post_max_size=2M", "-S", "0.0.0.0:8080", "router.php"]
+ENTRYPOINT ["/usr/local/bin/frankenphp"]
+CMD ["run", "--config", "/etc/frankenphp/Caddyfile"]

@@ -1,0 +1,52 @@
+{
+	admin off
+	auto_https off
+	persist_config off
+
+	frankenphp {
+		num_threads 4
+		max_threads auto
+		max_wait_time 5s
+		max_requests 10000
+		php_ini expose_php 0
+		php_ini display_errors 0
+		php_ini log_errors 1
+		php_ini max_execution_time 3
+		php_ini memory_limit 128M
+		php_ini post_max_size 2M
+	}
+}
+
+:8080 {
+	root * /app
+	encode zstd gzip
+
+	header {
+		-Server
+		Referrer-Policy "no-referrer"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Permissions-Policy "camera=(), geolocation=(), microphone=()"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+	}
+
+	route {
+		@health path /healthz
+		header @health Content-Type "text/plain; charset=utf-8"
+		respond @health "ok" 200
+
+		@api path /server/api.php
+		php @api
+
+		@assets path_regexp assets \.(css|gif|ico|js|json|png|svg|txt|webmanifest|webp)$
+		file_server @assets
+
+		@application path_regexp application ^/(index\.html|[a-z0-9]+/?)?$
+		handle @application {
+			rewrite * /index.php
+			php
+		}
+
+		respond "Not Found" 404
+	}
+}

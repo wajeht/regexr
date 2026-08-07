@@ -36,10 +36,10 @@ function charOffset(string $text, int $byteOffset): int
     return unicodeLength(substr($text, 0, $byteOffset));
 }
 
-function regexError(): ?array
+function regexError(?string $warning = null): ?array
 {
     $code = preg_last_error();
-    if ($code === PREG_NO_ERROR) {
+    if ($code === PREG_NO_ERROR && $warning === null) {
         return null;
     }
 
@@ -48,10 +48,37 @@ function regexError(): ?array
         : ($code === PREG_BAD_UTF8_ERROR || $code === PREG_BAD_UTF8_OFFSET_ERROR ? 'badutf8' : 'error');
 
     return [
-        'message' => preg_last_error_msg(),
+        'message' => $warning ?? preg_last_error_msg(),
         'name' => 'PCRE_ERROR_' . $code,
         'id' => $id,
     ];
+}
+
+function pcreCall(callable $operation, ?array &$error): mixed
+{
+    $warning = null;
+    set_error_handler(static function (int $severity, string $message) use (&$warning): bool {
+        if ($severity !== E_WARNING) {
+            return false;
+        }
+
+        $separator = strpos($message, '): ');
+        $warning = $separator === false ? $message : substr($message, $separator + 3);
+        return true;
+    }, E_WARNING);
+
+    try {
+        $result = $operation();
+    } finally {
+        restore_error_handler();
+    }
+
+    $captured = regexError($warning);
+    if ($captured !== null) {
+        $error = $captured;
+    }
+
+    return $result;
 }
 
 function matchEntry(array $match, string $text): array
@@ -75,12 +102,17 @@ function matchEntry(array $match, string $text): array
     return $result;
 }
 
-function runMatch(string $regex, string $text, bool $global): array
+function runMatch(string $regex, string $text, bool $global, ?array &$error): array
 {
     $matches = [];
-    $result = $global
-        ? preg_match_all($regex, $text, $matches, PREG_OFFSET_CAPTURE | PREG_SET_ORDER)
-        : preg_match($regex, $text, $matches, PREG_OFFSET_CAPTURE);
+    $operation = $global
+        ? static function () use ($regex, $text, &$matches): int|false {
+            return preg_match_all($regex, $text, $matches, PREG_OFFSET_CAPTURE | PREG_SET_ORDER);
+        }
+        : static function () use ($regex, $text, &$matches): int|false {
+            return preg_match($regex, $text, $matches, PREG_OFFSET_CAPTURE);
+        };
+    $result = pcreCall($operation, $error);
 
     if ($result === false || $result === 0) {
         return [];
@@ -124,15 +156,28 @@ try {
         $results = [];
         foreach (($request->tests ?? []) as $test) {
             $matches = [];
-            $matched = $global
-                ? preg_match_all($regex, (string) $test->text, $matches)
-                : preg_match($regex, (string) $test->text, $matches);
+            $testText = (string) $test->text;
+            $testError = null;
+            $operation = $global
+                ? static function () use ($regex, $testText, &$matches): int|false {
+                    return preg_match_all($regex, $testText, $matches);
+                }
+                : static function () use ($regex, $testText, &$matches): int|false {
+                    return preg_match($regex, $testText, $matches);
+                };
+            $matched = pcreCall($operation, $testError);
             $entry = ['id' => $test->id];
             if ($matched === false) {
-                $entry['error'] = regexError();
+                $entry['error'] = $testError;
             } elseif ($matched > 0) {
-                preg_match($regex, (string) $test->text, $first, PREG_OFFSET_CAPTURE);
-                $entry['i'] = charOffset((string) $test->text, (int) $first[0][1]);
+                $first = [];
+                pcreCall(
+                    static function () use ($regex, $testText, &$first): int|false {
+                        return preg_match($regex, $testText, $first, PREG_OFFSET_CAPTURE);
+                    },
+                    $testError,
+                );
+                $entry['i'] = charOffset($testText, (int) $first[0][1]);
                 $entry['l'] = unicodeLength((string) $first[0][0]);
             }
             $results[] = $entry;
@@ -142,14 +187,23 @@ try {
         $text = (string) ($request->text ?? '');
         $tool = is_object($request->tool ?? null) ? $request->tool : (object) ['id' => '', 'input' => ''];
         $toolResult = '';
+        $pcreError = null;
         if (($tool->id ?? '') === 'replace') {
-            $toolResult = preg_replace($regex, (string) ($tool->input ?? ''), $text) ?? '';
+            $toolResult = pcreCall(
+                static fn(): ?string => preg_replace($regex, (string) ($tool->input ?? ''), $text),
+                $pcreError,
+            ) ?? '';
         } elseif (($tool->id ?? '') === 'list') {
             $values = [];
-            preg_replace_callback($regex, static function (array $matches) use (&$values, $regex, $tool): string {
-                $values[] = preg_replace($regex, (string) ($tool->input ?? ''), $matches[0]) ?? '';
-                return $matches[0];
-            }, $text);
+            pcreCall(
+                static function () use ($regex, $text, $tool, &$values): ?string {
+                    return preg_replace_callback($regex, static function (array $matches) use (&$values, $regex, $tool): string {
+                        $values[] = preg_replace($regex, (string) ($tool->input ?? ''), $matches[0]) ?? '';
+                        return $matches[0];
+                    }, $text);
+                },
+                $pcreError,
+            );
             $toolResult = implode('', $values);
         }
 
@@ -157,12 +211,11 @@ try {
             'id' => $id,
             'timestamp' => time(),
             'mode' => 'text',
-            'matches' => runMatch($regex, $text, $global),
+            'matches' => runMatch($regex, $text, $global, $pcreError),
             'tool' => ['id' => $tool->id ?? '', 'result' => $toolResult],
         ];
-        $error = regexError();
-        if ($error !== null) {
-            $data['error'] = $error;
+        if ($pcreError !== null) {
+            $data['error'] = $pcreError;
         }
     }
 
