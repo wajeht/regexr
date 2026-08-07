@@ -1,24 +1,47 @@
-# regexr
+# RegExr
 
-Privacy-focused self-hosted image for [gskinner/regexr](https://github.com/gskinner/regexr), deployed at [regex.jaw.dev](https://regex.jaw.dev).
+[![RegExr CI](https://github.com/wajeht/regexr/actions/workflows/publish.yml/badge.svg?branch=main)](https://github.com/wajeht/regexr/actions/workflows/publish.yml) [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://github.com/wajeht/regexr/blob/main/LICENSE) [![Open Source Love svg1](https://badges.frapsoft.com/os/v1/open-source.svg?v=103)](https://github.com/wajeht/regexr)
 
-## Changes from upstream
+a privacy-focused, self-hosted version of [RegExr](https://github.com/gskinner/regexr)
 
-- Pins upstream commit `d18630d02372b38614f220576bd1888326cf8e78`.
-- Keeps browser JavaScript and server-side PHP/PCRE matching.
-- Removes analytics, advertising, accounts, community storage, and remote save/share.
-- Runs statelessly as an unprivileged user with a read-only root filesystem.
+# Usage
 
-The image and modifications are licensed under GPL-3.0-only, matching upstream.
+use it at [regex.jaw.dev](https://regex.jaw.dev), or run it locally:
 
-## Usage
-
-```yaml
-image: ghcr.io/wajeht/regexr:<tag>
+```bash
+docker run --rm \
+  --publish 8080:8080 \
+  --read-only \
+  --tmpfs /tmp \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  ghcr.io/wajeht/regexr:latest
 ```
 
-## Updates
+then open [localhost:8080](http://localhost:8080).
 
-Pull requests and main pushes validate the `linux/amd64` image. Version tags publish `linux/amd64` and `linux/arm64` images, create a GitHub release, and update `apps/regexr` in home-ops.
+## How it works
 
-Automatic deployment requires a `GH_TOKEN` Actions secret with access to home-ops and GHCR, plus a repository variable named `HOME_OPS_DEPLOY_ENABLED` set to `true`.
+1. Builds the upstream RegExr web app from a pinned commit.
+2. Runs JavaScript regular expressions in the browser.
+3. Uses a small PHP endpoint for server-side PCRE matching.
+4. Removes analytics, ads, accounts, community storage, and remote save/share features.
+5. Runs statelessly as an unprivileged user with a read-only filesystem.
+
+## API Endpoints
+
+### GET /
+
+Serves the RegExr application.
+
+### POST /server/api.php
+
+Internal endpoint used by the application for PCRE matching.
+
+### GET /healthz
+
+Health check endpoint. Returns `ok` when the service is healthy.
+
+## License
+
+Distributed under the GPL-3.0-only License, matching upstream RegExr. See [LICENSE](./LICENSE) for more information.
