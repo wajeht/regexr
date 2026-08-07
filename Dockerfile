@@ -39,6 +39,7 @@ WORKDIR /app
 COPY --from=build /src/build ./
 COPY api.php ./server/api.php
 COPY index.php ./
+COPY --chmod=644 healthz ./
 COPY --chmod=644 Caddyfile /etc/frankenphp/Caddyfile
 COPY LICENSE /usr/share/licenses/regexr/LICENSE
 
@@ -47,7 +48,7 @@ USER www-data
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD php -r '$r=@file_get_contents("http://127.0.0.1:8080/healthz"); exit($r === "ok" ? 0 : 1);'
+  CMD php -r '$r=@file_get_contents("http://127.0.0.1:8080/healthz"); exit($r === "ok\n" ? 0 : 1);'
 
 ENTRYPOINT ["/usr/local/bin/frankenphp"]
 CMD ["run", "--config", "/etc/frankenphp/Caddyfile"]

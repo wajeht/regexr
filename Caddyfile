@@ -33,7 +33,7 @@
 	route {
 		@health path /healthz
 		header @health Content-Type "text/plain; charset=utf-8"
-		respond @health "ok" 200
+		file_server @health
 
 		@api path /server/api.php
 		php @api
