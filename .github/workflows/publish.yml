@@ -3,24 +3,18 @@ name: Publish RegExr Image
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     name: Build
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      tag: ${{ steps.image-name.outputs.tag }}
 
     steps:
       - name: Checkout
@@ -29,38 +23,19 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
-      - name: Log in to GHCR
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate image tag
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        id: image-name
-        run: |
-          TAG="${GITHUB_SHA::7}"
-          IMAGE="ghcr.io/${{ github.repository_owner }}/regexr"
-          IMAGE=$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "image=${IMAGE}:${TAG}" >> "$GITHUB_OUTPUT"
-
       - name: Build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64
-          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-          tags: ${{ steps.image-name.outputs.image }}
+          push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   release:
     name: Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -92,9 +67,26 @@ jobs:
         run: |
           IMAGE=ghcr.io/${{ github.repository_owner }}/regexr
           IMAGE=$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')
-          VERSION=${GITHUB_REF#refs/tags/}
+
+          EXISTING_TAG=$(git tag --points-at "$GITHUB_SHA" --sort=-v:refname | sed -n -E '/^v[0-9]+\.[0-9]+\.[0-9]+$/p' | sed -n '1p')
+          LATEST_TAG=$(git tag --sort=-v:refname | sed -n -E '/^v[0-9]+\.[0-9]+\.[0-9]+$/p' | sed -n '1p')
+
+          if [ -n "$EXISTING_TAG" ]; then
+            VERSION=$EXISTING_TAG
+            PREVIOUS_TAG=$(git tag --sort=-v:refname | sed -n -E '/^v[0-9]+\.[0-9]+\.[0-9]+$/p' | grep -Fxv "$VERSION" | sed -n '1p' || true)
+          elif [ -n "$LATEST_TAG" ]; then
+            IFS=. read -r MAJOR MINOR PATCH <<< "${LATEST_TAG#v}"
+            VERSION="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+            PREVIOUS_TAG=$LATEST_TAG
+          else
+            VERSION=v1.0.0
+            PREVIOUS_TAG=
+          fi
+
+          SHORT_SHA=${GITHUB_SHA::7}
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "tags=${IMAGE}:${VERSION},${IMAGE}:latest" >> "$GITHUB_OUTPUT"
+          echo "previous=${PREVIOUS_TAG}" >> "$GITHUB_OUTPUT"
+          echo "tags=${IMAGE}:${VERSION},${IMAGE}:${SHORT_SHA},${IMAGE}:latest" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -112,16 +104,18 @@ jobs:
         with:
           generate_release_notes: true
           tag_name: ${{ steps.meta.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          previous_tag: ${{ steps.meta.outputs.previous }}
 
   deploy:
     name: Deploy
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build
+    needs: release
     uses: wajeht/docker-cd-deploy-workflow/.github/workflows/deploy.yaml@970a4d7bd568e096d091fbec3371019c763def1f # v0.0.26
     with:
       app-path: apps/regexr
       service-name: regexr
-      tag: ${{ needs.build.outputs.tag }}
+      tag: ${{ needs.release.outputs.version }}
       url: https://regex.jaw.dev
     secrets:
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
