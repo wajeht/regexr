@@ -132,19 +132,46 @@ index 6425f69..5fa185a 100644
 +Track.event = function() {};
  
 diff --git a/gulpfile.babel.js b/gulpfile.babel.js
-index f21ca37..05ca448 100644
 --- a/gulpfile.babel.js
 +++ b/gulpfile.babel.js
-@@ -3,8 +3,7 @@ const gulp = require("gulp");
- const inject = require("gulp-inject");
- const rename = require("gulp-rename");
- const template = require("gulp-template");
+@@ -5,3 +5,2 @@
+-const template = require("gulp-template");
 -const sass = require("gulp-sass");
 -sass.compiler = require("sass");
++const template = require("gulp-template").default;
 +const sass = require("gulp-sass")(require("sass"));
- const cleanCSS = require("gulp-clean-css");
- const htmlmin = require("gulp-htmlmin");
- const svgstore = require("gulp-svgstore");
+@@ -12 +11 @@
+-const autoprefixer = require("gulp-autoprefixer");
++const autoprefixer = require("gulp-autoprefixer").default;
+@@ -14,3 +13,3 @@
+-const babel = require("rollup-plugin-babel");
+-const terser = require("rollup-plugin-terser").terser;
+-const replace = require("rollup-plugin-replace");
++const babel = require("@rollup/plugin-babel").babel;
++const terser = require("@rollup/plugin-terser").default;
++const replace = require("@rollup/plugin-replace").default;
+@@ -20 +19 @@
+-const del = require("del");
++const deleteAsync = require("del").deleteAsync;
+@@ -34 +33,2 @@
+-	babelrc: false
++	babelrc: false,
++	babelHelpers: "bundled"
+@@ -37,0 +38 @@
++	preventAssignment: true,
+@@ -178,3 +179,3 @@
+-				{removeAttrs: {attrs: "fill"}},
+-				{removeStyleElement: true},
+-				{removeViewBox: false},
++				{name: "removeAttrs", params: {attrs: "fill"}},
++				"removeStyleElement",
++				{name: "removeViewBox", active: false},
+@@ -199 +200 @@
+-	return del([
++	return deleteAsync([
+@@ -238 +239 @@
+-	return del([
++	return deleteAsync([
 diff --git a/index.html b/index.html
 index 0473322..2a769a7 100644
 --- a/index.html
