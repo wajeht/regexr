@@ -16,6 +16,11 @@ jobs:
     name: Build
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.image-name.outputs.tag }}
 
     steps:
       - name: Checkout
@@ -24,13 +29,32 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image tag
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: image-name
+        run: |
+          TAG="${GITHUB_SHA::7}"
+          IMAGE="ghcr.io/${{ github.repository_owner }}/regexr"
+          IMAGE=$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "image=${IMAGE}:${TAG}" >> "$GITHUB_OUTPUT"
+
       - name: Build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64
-          push: false
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.image-name.outputs.image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -91,13 +115,13 @@ jobs:
 
   deploy:
     name: Deploy
-    if: startsWith(github.ref, 'refs/tags/v') && vars.HOME_OPS_DEPLOY_ENABLED == 'true'
-    needs: release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
     uses: wajeht/docker-cd-deploy-workflow/.github/workflows/deploy.yaml@970a4d7bd568e096d091fbec3371019c763def1f # v0.0.26
     with:
       app-path: apps/regexr
       service-name: regexr
-      tag: ${{ needs.release.outputs.version }}
+      tag: ${{ needs.build.outputs.tag }}
       url: https://regex.jaw.dev
     secrets:
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
