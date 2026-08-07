@@ -20,7 +20,7 @@
     "gulp-sass": "5.1.0",
     "gulp-svgmin": "2.2.0",
     "gulp-svgstore": "7.0.1",
-    "gulp-template": "5.0.0",
+    "gulp-template": "6.1.0",
     "rollup": "1.32.1",
     "rollup-plugin-babel": "4.4.0",
     "rollup-plugin-replace": "2.2.0",
