@@ -27,7 +27,7 @@
     "gulp-svgmin": "4.1.0",
     "gulp-svgstore": "9.0.0",
     "gulp-template": "6.1.0",
-    "rollup": "4.63.0",
+    "rollup": "4.63.1",
     "sass": "1.103.1",
     "vinyl": "3.0.1"
   },
