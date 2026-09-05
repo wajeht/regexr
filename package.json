@@ -9,9 +9,9 @@
     "node": ">=24.11.0"
   },
   "devDependencies": {
-    "@babel/core": "7.29.7",
-    "@babel/preset-env": "7.29.7",
-    "@babel/register": "7.29.7",
+    "@babel/core": "8.0.1",
+    "@babel/preset-env": "8.0.2",
+    "@babel/register": "8.0.1",
     "@rollup/plugin-babel": "7.1.0",
     "@rollup/plugin-replace": "6.0.3",
     "@rollup/plugin-terser": "1.0.0",
