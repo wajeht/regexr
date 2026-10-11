@@ -1,5 +1,5 @@
 ARG NODE_IMAGE=node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
-ARG FRANKENPHP_IMAGE=dunglas/frankenphp:1-php8.5-bookworm@sha256:265db135c5bddce6e3aab85d8943052d37a2f0b75211a21fec5ab5ff05826713
+ARG FRANKENPHP_IMAGE=dunglas/frankenphp:1-php8.5-bookworm@sha256:cbe891d9411baf58a3da2b4e05b47edda54410a487a818b4e7605882d796b1bb
 
 FROM ${NODE_IMAGE} AS build
 
